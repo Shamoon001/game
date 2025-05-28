@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Escape the Maze</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron&display=swap');
+  body {
+    margin: 0;
+    background: radial-gradient(circle at center, #000000, #003300);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    height: 100vh;
+    font-family: 'Orbitron', monospace, sans-serif;
+    color: #e0e0e0;
+    user-select: none;
+  }
+  h1 {
+    margin: 20px 0 5px 0;
+    font-weight: 900;
+    letter-spacing: 2px;
+    color: #f8f8f0;
+    text-shadow: 0 0 10px #00ff00;
+  }
+  #infoBar {
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+    color: #ffee58;
+    display: flex;
+    gap: 20px;
+    min-width: 960px;
+    justify-content: center;
+    user-select: none;
+  }
+  #infoBar > div {
+    text-shadow: 0 0 6px #ffeb3b;
+  }
+  #keyIndicator {
+    display: flex; 
+    align-items: center;
+    gap: 6px;
+  }
+  #keyIndicator .key-icon {
+    width: 20px;
+    height: 20px;
+    background: radial-gradient(circle at center, #ffeb3b, #b38f00);
+    border-radius: 50%;
+    box-shadow: 0 0 6px #ffff66;
+    animation: glow 2s infinite ease-in-out;
+  }
+  @keyframes glow {
+    0% { box-shadow: 0 0 4px #ffeb3b; }
+    50% { box-shadow: 0 0 12px #fff176; }
+    100% { box-shadow: 0 0 4px #ffeb3b; }
+  }
+  #game {
+    position: relative;
+    width: 960px; /* 24 cols * 40px */
+    height: 600px; /* 15 rows * 40px */
+    background: #000;
+    box-shadow:
+      0 0 30px #33ff33,
+      inset 0 0 50px #007700;
+    border-radius: 10px;
+    overflow: hidden;
+    outline: none;
+  }
+  .tile {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    box-sizing: border-box;
+  }
+  .wall {
+    background: #004400;
+    box-shadow:
+      inset 0 0 12px #00ff00,
+      0 0 10px #004400;
+    border-radius: 4px;
+    border: 2px solid #00cc00;
+  }
+  .floor {
+    background: #001a00;
+  }
+  .exit {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    background: radial-gradient(circle, #ffff33 45%, #ffcc00 90%);
+    box-shadow:
+      0 0 15px #ffff33,
+      inset 0 0 10px #ffcc00;
+    border-radius: 50%;
+    border: 2px solid #ffff66;
+  }
+  .exit.locked {
+    filter: grayscale(60%);
+    background: radial-gradient(circle, #666600, #333300);
+    box-shadow:
+      0 0 7px #666600,
+      inset 0 0 5px #333300;
+    border: 2px solid #999900;
+  }
+  .key {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    background: radial-gradient(circle at center, #ffeb3b, #b38f00);
+    border-radius: 50%;
+    box-shadow:
+      0 0 10px #ffff66;
+    animation: glow 2s infinite ease-in-out;
+  }
+  #player {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: #ffff00;
+    box-shadow:
+      0 0 15px #ffff00,
+      inset -5px 0 15px #ffeb3b;
+    border: 2px solid #cccc00;
+    transition: transform 0.1s linear;
+    z-index: 10;
+    clip-path: polygon(50% 50%, 100% 25%, 100% 75%);
+    animation: chomp 0.4s infinite;
+  }
+  @keyframes chomp {
+    0%, 100% { clip-path: polygon(50% 50%, 100% 25%, 100% 75%); }
+    50% { clip-path: polygon(50% 50%, 100% 10%, 100% 90%); }
+  }
+  .enemy {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    border-radius: 50% 50% 0 0;
+    background: radial-gradient(circle at center, #ff0000, #800000);
+    border: 3px solid #ff5555;
+    box-shadow:
+      0 0 10px #ff4444 inset,
+      0 0 6px #ff8888;
+    z-index: 9;
+  }
+  .enemy.blinky {
+    background: radial-gradient(circle at center, #ff0000, #800000);
+    border-color: #ff5555;
+    box-shadow: 0 0 10px #ff4444 inset, 0 0 6px #ff8888;
+  }
+  .enemy.pinky {
+    background: radial-gradient(circle at center, #ff69b4, #800040);
+    border-color: #ff55aa;
+    box-shadow: 0 0 10px #ff55aa inset, 0 0 6px #ff99cc;
+  }
+  .enemy.inky {
+    background: radial-gradient(circle at center, #00ffff, #004444);
+    border-color: #00cccc;
+    box-shadow: 0 0 10px #00cccc inset, 0 0 6px #00eeee;
+  }
+  .enemy.clyde {
+    background: radial-gradient(circle at center, #ffb347, #804400);
+    border-color: #ffaa33;
+    box-shadow: 0 0 10px #ffaa33 inset, 0 0 6px #ffcc55;
+  }
+</style>
+</head>
+<body>
+<h1>Escape the Maze - Pac-Man Style Multi-level</h1>
+
+<div id="infoBar">
+  <div id="livesDisplay">Lives: <span id="livesCount">3</span></div>
+  <div id="timerDisplay">Time: 0.00s</div>
+  <div id="highScoreDisplay">Best: --</div>
+  <div id="keyIndicator" style="display:none;">
+    <div class="key-icon"></div>
+    <div>Key Needed</div>
+  </div>
+  <div id="levelDisplay">Level: 1</div>
+</div>
+
+<div id="message"></div>
+<div id="game" tabindex="0" aria-label="Escape the Maze Game"></div>
+
+<script>
+const TILE_SIZE = 40;
+const ROWS = 15;
+const COLS = 24;
+const PLAYER_SPEED = 200;
+const ENEMY_SPEED = 70;
+const ENEMY_MIN_DISTANCE = TILE_SIZE * 1.7;
+const MAX_LIVES = 3;
+const AUDIO_VOLUME = 0.15;
+
+const infoBar = {
+  lives: document.getElementById('livesCount'),
+  timer: document.getElementById('timerDisplay'),
+  highScore: document.getElementById('highScoreDisplay'),
+  keyIndicator: document.getElementById('keyIndicator'),
+  level: document.getElementById('levelDisplay')
+};
+
+const gameElem = document.getElementById('game');
+const messageElem = document.getElementById('message');
+
+const levels = [
+  [
+    "########################",
+    "#P....#...........#...E#",
+    "#.#######.#####.###.####",
+    "#.......#.#...#.....#..#",
+    "#.###.#.#.#.#.#####.#..#",
+    "#...#.#...#.#.#....#.#.#",
+    "###.#.#####.#.#.##.#.#.#",
+    "#...#.......#....#...#.#",
+    "#.###.###########.###.##",
+    "#.....#.....#K....#....#",
+    "#.###.#.###.#.#######..#",
+    "#.#...#...#.#.......#..#",
+    "#.#.#####.#.#######.#..#",
+    "#.#.......#.........#..#",
+    "########################"
+  ],
+  [
+    "########################",
+    "#P.....#.........#.....#",
+    "#.###.###.###.###.###.##",
+    "#.#...#...#...#.#...#..#",
+    "#.#.#.#.###.#.#.#.#.#..#",
+    "#...#...#K..#...#...#..#",
+    "###.#.###.#######.###.##",
+    "#...#.#.....#.....#....#",
+    "#.###.#.###.#.#####.####",
+    "#.#...#.#...#.....#....#",
+    "#.#.###.#.#####.#.#.####",
+    "#.#.....#.....#.#.#....#",
+    "#.#######.###.#.#.###..#",
+    "#.........#.....#...#..#",
+    "###################E####"
+  ],
+  [
+    "########################",
+    "#P............#........#",
+    "#.#######.##########.###",
+    "#.#.....#.#.......#.#..#",
+    "#.#.###.#.#.#####.#.##.#",
+    "#...#.#...#.#...#.#....#",
+    "###.#.#####.#.#.#.####.#",
+    "#...#.......#.#.#......#",
+    "#.###########.#.########",
+    "#.#.........#.#.......K#",
+    "#.#.#######.#.########.#",
+    "#.#.......#.#..........#",
+    "#.#######.#.#########..#",
+    "#.........#.............",
+    "###################E####"
+  ]
+];
+
+const DIRS = {
+  up: {x:0,y:-1},
+  down: {x:0,y:1},
+  left: {x:-1,y:0},
+  right: {x:1,y:0},
+  none: {x:0,y:0}
+};
+
+let player = {
+  x:0, y:0,
+  pixelX:0, pixelY:0,
+  direction:'none',
+  nextDirection:'none',
+  elem:null,
+  speed: PLAYER_SPEED
+};
+
+let enemies = [];
+let key = null;
+let exit = {x:0,y:0,locked:true,elem:null};
+let lives = MAX_LIVES;
+let startTime=0;
+let elapsedTime=0;
+let timerId=null;
+let gameRunning=false;
+let currentLevel=0;
+let enemiesActive = false;
+let highScores = JSON.parse(localStorage.getItem('escapeMazeHighScores') || '{}');
+
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playTone(freq,duration=150,type='square'){
+  if(!gameRunning) return;
+  if(audioCtx.state === 'suspended') audioCtx.resume();
+  let osc=audioCtx.createOscillator();
+  let gain=audioCtx.createGain();
+  osc.type=type;
+  osc.frequency.setValueAtTime(freq,audioCtx.currentTime);
+  gain.gain.setValueAtTime(AUDIO_VOLUME,audioCtx.currentTime);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + duration/1000);
+}
+function playMoveSound(){playTone(800,50);}
+function playKeyPickupSound(){playTone(1200,300,'triangle');}
+function playDoorUnlockSound(){playTone(900,300,'sine');}
+function playWinSound(){
+  playTone(900,150,'sine');
+  setTimeout(() => playTone(1200,200,'triangle'), 200);
+  setTimeout(() => playTone(1500,300,'square'), 450);
+}
+function playLossSound(){
+  playTone(200,400,'square');
+  setTimeout(() => playTone(150,500,'square'), 450);
+}
+
+function updateHighScoreDisplay(){
+  let best = highScores[currentLevel];
+  infoBar.highScore.textContent = best !== undefined ? `Best: ${best.toFixed(2)}s` : 'Best: --';
+}
+
+function updateLivesDisplay(){
+  infoBar.lives.textContent = lives;
+}
+
+function updateKeyIndicator(){
+  infoBar.keyIndicator.style.display = (key && !key.collected) ? 'flex' : 'none';
+}
+
+function removeExistingEnemies(){
+  enemies.forEach(e => {
+    if(e.elem && e.elem.parentElement) e.elem.parentElement.removeChild(e.elem);
+  });
+  enemies = [];
+}
+
+function buildMaze(level){
+  removeExistingEnemies();
+
+  gameElem.innerHTML = '';
+  exit.locked = true;
+  exit.elem = null;
+  key = null;
+  player.direction = 'none'; player.nextDirection = 'none';
+  enemiesActive = false;
+  updateLivesDisplay();
+
+  const maze = levels[level];
+
+  for(let y=0; y<ROWS; y++){
+    for(let x=0; x<COLS; x++){
+      const ch = maze[y][x];
+      const tile = document.createElement('div');
+      tile.classList.add('tile');
+      tile.style.top = `${y*TILE_SIZE}px`;
+      tile.style.left = `${x*TILE_SIZE}px`;
+
+      if(ch === '#'){
+        tile.classList.add('wall');
+        gameElem.appendChild(tile);
+      } else {
+        tile.classList.add('floor');
+        gameElem.appendChild(tile);
+        if(ch === 'P'){
+          player.x = x;
+          player.y = y;
+          player.pixelX = x*TILE_SIZE + TILE_SIZE/2;
+          player.pixelY = y*TILE_SIZE + TILE_SIZE/2;
+        }
+        if(ch === 'E'){
+          let exitElem = document.createElement('div');
+          exitElem.classList.add('exit','locked');
+          exitElem.style.top = `${y*TILE_SIZE}px`;
+          exitElem.style.left = `${x*TILE_SIZE}px`;
+          gameElem.appendChild(exitElem);
+          exit.x = x; exit.y = y; exit.locked = true; exit.elem = exitElem;
+        }
+        if(ch === 'K'){
+          let keyElem = document.createElement('div');
+          keyElem.classList.add('key');
+          keyElem.style.top = `${y*TILE_SIZE + (TILE_SIZE - 24)/2}px`;
+          keyElem.style.left = `${x*TILE_SIZE + (TILE_SIZE - 24)/2}px`;
+          gameElem.appendChild(keyElem);
+          key = {x:x, y:y, collected:false, elem:keyElem};
+        }
+      }
+    }
+  }
+
+  player.elem = document.createElement('div');
+  player.elem.id = 'player';
+  gameElem.appendChild(player.elem);
+  setPlayerPixelPosition(player.pixelX, player.pixelY);
+
+  createEnemies(level);
+  updateKeyIndicator();
+  updateHighScoreDisplay();
+
+  infoBar.level.textContent = `Level: ${level + 1}`;
+  messageElem.textContent = 'Enemies start moving in 3 seconds... Get ready!';
+  setTimeout(() => {
+    enemiesActive = true;
+    messageElem.textContent = '';
+    playDoorUnlockSound();
+  }, 3000);
+}
+
+const enemyPaths = {
+  0: [
+    {type: 'blinky', path: [{x:21,y:1},{x:21,y:6}]},
+    {type: 'pinky', path: [{x:12,y:7},{x:13,y:7},{x:13,y:8},{x:12,y:8}]},
+    {type: 'inky', path: [{x:4,y:3},{x:4,y:9}]}
+  ],
+  1: [
+    {type: 'blinky', path: [{x:17,y:2},{x:21,y:2}]},
+    {type: 'pinky', path: [{x:12,y:7},{x:13,y:7},{x:13,y:8},{x:12,y:8}]},
+    {type: 'clyde', path: [{x:3,y:12},{x:6,y:12},{x:6,y:14},{x:3,y:14}]}
+  ],
+  2: [ // Added a simple 3rd level for demo
+    {type: 'blinky', path: [{x:20,y:5},{x:20,y:10}, {x:22,y:10}, {x:22,y:5}]},
+    {type: 'pinky', path: [{x:12,y:7},{x:13,y:7},{x:13,y:8},{x:12,y:8}]},
+    {type: 'inky', path: [{x:4,y:3},{x:4,y:9}]}
+  ]
+};
+
+function createEnemies(level){
+  removeExistingEnemies();
+  enemies = [];
+  let created = 0;
+  for(let enemyData of (enemyPaths[level] || [])){
+    if(created >= 3) break;
+    createEnemyInstance(enemyData.path[0].x, enemyData.path[0].y, enemyData.type, enemyData.path);
+    created++;
+  }
+}
+
+function createEnemyInstance(startX, startY, type, path){
+  let enemyElem = document.createElement('div');
+  enemyElem.classList.add('enemy', type);
+  gameElem.appendChild(enemyElem);
+
+  let enemy = {
+    elem: enemyElem,
+    path: path,
+    pathLength: path.length,
+    pathIndex: 0,
+    currentTile: {x: startX, y: startY},
+    targetTile: null,
+    position: {x: startX * TILE_SIZE + TILE_SIZE/2, y: startY * TILE_SIZE + TILE_SIZE /2},
+    speed: ENEMY_SPEED,
+    mode: 'patrol',
+    type: type,
+    direction: {x: 0, y: 0},
+    moving: false,
+  };
+
+  if(path.length > 1){
+    enemy.pathIndex = 1;
+    enemy.targetTile = path[1];
+    enemy.direction = {x: enemy.targetTile.x - enemy.currentTile.x, y: enemy.targetTile.y - enemy.currentTile.y};
+    enemy.moving = true;
+  } else {
+    enemy.pathIndex = 0;
+    enemy.targetTile = path[0];
+    enemy.direction = {x:0, y:0};
+    enemy.moving = false;
+  }
+
+  setEnemyPixelPosition(enemy, enemy.position.x, enemy.position.y);
+  enemies.push(enemy);
+}
+
+function setPlayerPixelPosition(px, py){
+  player.pixelX = px;
+  player.pixelY = py;
+  player.elem.style.left = (px - 16) + 'px';
+  player.elem.style.top = (py - 16) + 'px';
+}
+
+function setEnemyPixelPosition(enemy, px, py){
+  enemy.position.x = px;
+  enemy.position.y = py;
+  enemy.elem.style.left = (px - 16) + 'px';
+  enemy.elem.style.top = (py - 16) + 'px';
+}
+
+function isWalkableTile(x,y){
+  if(x < 0 || y < 0 || x >= COLS || y >= ROWS) return false;
+  const ch = levels[currentLevel][y][x];
+  if(ch === '#') return false;
+  if(ch === 'E' && exit.locked) return false;
+  return true;
+}
+
+function pixelToTile(px, py){
+  return {x: Math.floor(px / TILE_SIZE), y: Math.floor(py / TILE_SIZE)};
+}
+
+function handleKeyDown(e){
+  if(!gameRunning) return;
+  if(audioCtx.state === 'suspended') audioCtx.resume();
+  switch(e.key){
+    case 'ArrowUp': case 'w': case 'W':
+      if(player.nextDirection !== 'up') playMoveSound();
+      player.nextDirection = 'up';
+      e.preventDefault();
+      break;
+    case 'ArrowDown': case 's': case 'S':
+      if(player.nextDirection !== 'down') playMoveSound();
+      player.nextDirection = 'down';
+      e.preventDefault();
+      break;
+    case 'ArrowLeft': case 'a': case 'A':
+      if(player.nextDirection !== 'left') playMoveSound();
+      player.nextDirection = 'left';
+      e.preventDefault();
+      break;
+    case 'ArrowRight': case 'd': case 'D':
+      if(player.nextDirection !== 'right') playMoveSound();
+      player.nextDirection = 'right';
+      e.preventDefault();
+      break;
+  }
+}
+
+function tryChangeDirection(){
+  if(player.nextDirection === player.direction) return;
+  const dirVec = DIRS[player.nextDirection];
+  const tile = pixelToTile(player.pixelX, player.pixelY);
+  const nextX = tile.x + dirVec.x;
+  const nextY = tile.y + dirVec.y;
+  if(!isWalkableTile(nextX, nextY)) return;
+  if(player.direction === 'left' || player.direction === 'right'){
+    if(player.nextDirection === 'up' || player.nextDirection === 'down'){
+      if(Math.abs((player.pixelY - TILE_SIZE/2) % TILE_SIZE) > 3) return;
+      player.pixelY = Math.round((player.pixelY - TILE_SIZE/2)/TILE_SIZE)*TILE_SIZE + TILE_SIZE/2;
+    }
+  } else if(player.direction === 'up' || player.direction === 'down'){
+    if(player.nextDirection === 'left' || player.nextDirection === 'right'){
+      if(Math.abs((player.pixelX - TILE_SIZE/2) % TILE_SIZE) > 3) return;
+      player.pixelX = Math.round((player.pixelX - TILE_SIZE/2)/TILE_SIZE)*TILE_SIZE + TILE_SIZE/2;
+    }
+  } else if(player.direction === 'none'){
+    player.pixelX = tile.x * TILE_SIZE + TILE_SIZE/2;
+    player.pixelY = tile.y * TILE_SIZE + TILE_SIZE/2;
+  }
+  player.direction = player.nextDirection;
+}
+
+function updatePlayer(delta){
+  if(player.direction === 'none') return;
+  const dirVec = DIRS[player.direction];
+  let newX = player.pixelX + dirVec.x * player.speed * delta;
+  let newY = player.pixelY + dirVec.y * player.speed * delta;
+  let nextTile = pixelToTile(newX, newY);
+
+  if(!isWalkableTile(nextTile.x, nextTile.y)){
+    if(dirVec.x !== 0){
+      player.pixelX = Math.round((player.pixelX - TILE_SIZE/2)/TILE_SIZE)*TILE_SIZE + TILE_SIZE/2;
+    }
+    if(dirVec.y !== 0){
+      player.pixelY = Math.round((player.pixelY - TILE_SIZE/2)/TILE_SIZE)*TILE_SIZE + TILE_SIZE/2;
+    }
+    player.direction = 'none';
+    player.nextDirection = 'none';
+    setPlayerPixelPosition(player.pixelX, player.pixelY);
+    return;
+  }
+  player.pixelX = newX;
+  player.pixelY = newY;
+  setPlayerPixelPosition(player.pixelX, player.pixelY);
+  checkKeyPickup();
+  checkExitReached();
+}
+
+function checkKeyPickup(){
+  if(key && !key.collected){
+    let dist = Math.hypot(player.pixelX - (key.x * TILE_SIZE + TILE_SIZE / 2), player.pixelY - (key.y * TILE_SIZE + TILE_SIZE / 2));
+    if(dist < TILE_SIZE / 1.5){
+      key.collected = true;
+      if(key.elem) key.elem.style.display = 'none';
+      exit.locked = false;
+      if(exit.elem) exit.elem.classList.remove('locked');
+      messageElem.textContent = 'You picked up the key! Exit unlocked.';
+      playKeyPickupSound();
+      updateKeyIndicator();
+      setTimeout(() => messageElem.textContent = '', 3000);
+    }
+  }
+}
+
+function checkExitReached(){
+  if(exit.locked) return;
+  let dist = Math.hypot(player.pixelX - (exit.x * TILE_SIZE + TILE_SIZE/2), player.pixelY - (exit.y * TILE_SIZE + TILE_SIZE/2));
+  if(dist < TILE_SIZE / 1.5){
+    endLevel(true);
+  }
+}
+
+function updateEnemy(enemy, delta){
+  if(!enemiesActive) return;
+
+  if(!enemy.moving && enemy.path.length > 0){
+    enemy.targetTile = enemy.path[enemy.pathIndex];
+    enemy.direction = {
+      x: enemy.targetTile.x - enemy.currentTile.x,
+      y: enemy.targetTile.y - enemy.currentTile.y
+    };
+    enemy.moving = true;
+  }
+
+  const targetX = enemy.targetTile.x * TILE_SIZE + TILE_SIZE/2;
+  const targetY = enemy.targetTile.y * TILE_SIZE + TILE_SIZE/2;
+  let dx = targetX - enemy.position.x;
+  let dy = targetY - enemy.position.y;
+  let dist = Math.sqrt(dx*dx + dy*dy);
+
+  if(dist <= enemy.speed * delta){
+    enemy.position.x = targetX;
+    enemy.position.y = targetY;
+    enemy.currentTile = {x: enemy.targetTile.x, y: enemy.targetTile.y};
+    enemy.pathIndex++;
+    if(enemy.pathIndex >= enemy.path.length) enemy.pathIndex = 0;
+    enemy.moving = false;
+  } else {
+    enemy.position.x += (dx/dist) * enemy.speed * delta;
+    enemy.position.y += (dy/dist) * enemy.speed * delta;
+  }
+
+  enemy.elem.style.left = (enemy.position.x - 16) + 'px';
+  enemy.elem.style.top = (enemy.position.y - 16) + 'px';
+}
+
+function maintainEnemyDistances(){
+  for(let i=0; i<enemies.length; i++){
+    for(let j=i+1; j<enemies.length; j++){
+      let e1 = enemies[i];
+      let e2 = enemies[j];
+      let dx = e1.position.x - e2.position.x;
+      let dy = e1.position.y - e2.position.y;
+      let dist = Math.sqrt(dx*dx + dy*dy);
+      if(dist < ENEMY_MIN_DISTANCE && dist > 0){
+        let overlap = ENEMY_MIN_DISTANCE - dist;
+        let pushX = (dx / dist) * (overlap / 2);
+        let pushY = (dy / dist) * (overlap / 2);
+        let newPos1 = {x: e1.position.x + pushX, y: e1.position.y + pushY};
+        let newPos2 = {x: e2.position.x - pushX, y: e2.position.y - pushY};
+        if(isWalkableTile(Math.floor(newPos1.x / TILE_SIZE), Math.floor(newPos1.y / TILE_SIZE))){
+          e1.position.x = newPos1.x;
+          e1.position.y = newPos1.y;
+        }
+        if(isWalkableTile(Math.floor(newPos2.x / TILE_SIZE), Math.floor(newPos2.y / TILE_SIZE))){
+          e2.position.x = newPos2.x;
+          e2.position.y = newPos2.y;
+        }
+        e1.elem.style.left = (e1.position.x - 16) + 'px';
+        e1.elem.style.top = (e1.position.y - 16) + 'px';
+        e2.elem.style.left = (e2.position.x - 16) + 'px';
+        e2.elem.style.top = (e2.position.y - 16) + 'px';
+      }
+    }
+  }
+}
+
+function checkCollisions(){
+  for(let enemy of enemies){
+    let dist = Math.hypot(player.pixelX - enemy.position.x, player.pixelY - enemy.position.y);
+    if(dist < TILE_SIZE / 1.5){
+      loseLife();
+      break;
+    }
+  }
+}
+
+function loseLife(){
+  lives--;
+  updateLivesDisplay();
+  playLossSound();
+  if(lives <= 0){
+    gameOver();
+  } else {
+    resetPositions();
+    messageElem.textContent = `You lost a life! Lives left: ${lives}`;
+    setTimeout(() => messageElem.textContent = '', 2500);
+  }
+}
+
+function gameOver(){
+  gameRunning = false;
+  messageElem.textContent = 'Game Over! Refresh to restart.';
+  stopTimer();
+}
+
+function startTimer(){
+  startTime = performance.now();
+  timerId = requestAnimationFrame(timerLoop);
+}
+function timerLoop(){
+  if(!gameRunning) return;
+  let now = performance.now();
+  elapsedTime = (now - startTime) / 1000;
+  infoBar.timer.textContent = `Time: ${elapsedTime.toFixed(2)}s`;
+  timerId = requestAnimationFrame(timerLoop);
+}
+function stopTimer(){
+  if(timerId) cancelAnimationFrame(timerId);
+  timerId = null;
+}
+
+function endLevel(won){
+  gameRunning = false;
+  stopTimer();
+  if(won){
+    playWinSound();
+    messageElem.textContent = 'Level Complete! 🎉';
+    updateHighScore();
+    setTimeout(() => {
+      currentLevel++;
+      if(currentLevel >= levels.length){
+        messageElem.textContent = 'You escaped all the mazes! 🎉🏆';
+      } else {
+        startLevel(currentLevel);
+        messageElem.textContent = '';
+      }
+    }, 3500);
+  }
+}
+
+function updateHighScore(){
+  const currentBest = highScores[currentLevel];
+  if(currentBest === undefined || elapsedTime < currentBest){
+    highScores[currentLevel] = elapsedTime;
+    localStorage.setItem('escapeMazeHighScores', JSON.stringify(highScores));
+    updateHighScoreDisplay();
+  }
+}
+
+function resetPositions(){
+  const maze = levels[currentLevel];
+  for(let y=0; y < ROWS; y++){
+    for(let x=0; x < COLS; x++){
+      if(maze[y][x] === 'P'){
+        player.x = x;
+        player.y = y;
+        player.pixelX = x * TILE_SIZE + TILE_SIZE / 2;
+        player.pixelY = y * TILE_SIZE + TILE_SIZE / 2;
+        player.direction = 'none';
+        player.nextDirection = 'none';
+        setPlayerPixelPosition(player.pixelX, player.pixelY);
+        break;
+      }
+    }
+  }
+  createEnemies(currentLevel);
+  enemiesActive = false;
+  setTimeout(() => enemiesActive = true, 1000);
+}
+
+let lastTime = 0;
+function gameLoop(timestamp){
+  if(!lastTime) lastTime = timestamp;
+  const delta = (timestamp - lastTime) / 1000;
+  lastTime = timestamp;
+
+  if(gameRunning){
+    tryChangeDirection();
+    updatePlayer(delta);
+    enemies.forEach(enemy => updateEnemy(enemy, delta));
+    maintainEnemyDistances();
+    checkCollisions();
+  }
+  requestAnimationFrame(gameLoop);
+}
+
+function startLevel(level){
+  currentLevel = level;
+  lives = MAX_LIVES;
+  buildMaze(level);
+  gameRunning = true;
+  enemiesActive = false;
+  startTimer();
+  updateLivesDisplay();
+  updateKeyIndicator();
+  lastTime = 0;
+}
+
+window.addEventListener('keydown', handleKeyDown);
+gameElem.focus();
+
+if(!highScores) highScores = {};
+updateHighScoreDisplay();
+
+startLevel(0);
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
